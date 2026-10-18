@@ -12,8 +12,7 @@ pipeline {
         string(name: 'AWS_ACCOUNT_ID', defaultValue: '951897726665', description: 'AWS account id where ECR repositories are created.')
         string(name: 'EKS_CLUSTER', defaultValue: 'aws-dev-cluster', description: 'EKS cluster name.')
         string(name: 'EKS_NAMESPACE', defaultValue: 'bbhealthapp', description: 'Namespace used for deployments.')
-        string(name: 'IMAGE_TAG', defaultValue: '${BUILD_NUMBER}', description: 'Docker image tag to push to ECR.')
-    }
+        }
     environment {
         JAVA_HOME = 'C:/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot'
         MAVEN_HOME = 'C:/Users/q/Tools/apache-maven-3.9.9'
@@ -22,11 +21,15 @@ pipeline {
         AWS_ACCOUNT_ID = "${params.AWS_ACCOUNT_ID}"
         EKS_CLUSTER = "${params.EKS_CLUSTER}"
         EKS_NAMESPACE = "${params.EKS_NAMESPACE}"
-        IMAGE_TAG = "${params.IMAGE_TAG}"
-        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${EKS_CLUSTER}"
-        MASTER_REPO = "${ECR_REGISTRY}/bbhealthapp-api-master"
-        DOCUMENT_REPO = "${ECR_REGISTRY}/bbhealthapp-api-document"
-        REGISTER_REPO = "${ECR_REGISTRY}/bbhealthapp-api-register"
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        ECR_REPO = "${ECR_REGISTRY}/aws-dev-app"
+        MASTER_IMAGE = "${ECR_REPO}:bbhealthapp-api-master-${IMAGE_TAG}"
+        DOCUMENT_IMAGE = "${ECR_REPO}:bbhealthapp-api-document-${IMAGE_TAG}"
+        REGISTER_IMAGE = "${ECR_REPO}:bbhealthapp-api-register-${IMAGE_TAG}"
+        MASTER_LATEST = "${ECR_REPO}:bbhealthapp-api-master-latest"
+        DOCUMENT_LATEST = "${ECR_REPO}:bbhealthapp-api-document-latest"
+        REGISTER_LATEST = "${ECR_REPO}:bbhealthapp-api-register-latest"
     }
     stages {
         stage('Checkout and Preflight') {
@@ -92,10 +95,9 @@ pipeline {
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-credentials',
+                     credentialsId: 'aws-credentials2',
                      accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
-                     sessionTokenVariable: 'AWS_SESSION_TOKEN']
+                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
                 ]) {
                     bat '''
                         echo Logging in to ECR...
@@ -114,29 +116,80 @@ pipeline {
                     steps {
                         dir('backend/bbhealthapp-api-master') {
                             bat '''
-                                docker buildx build --platform linux/amd64 --push -t %MASTER_REPO%:%IMAGE_TAG% -t %MASTER_REPO%:latest .
-                                if errorlevel 1 exit /b 1
-                            '''
+                @echo off
+                echo Building Master Docker Image...
+
+                docker build -t %MASTER_IMAGE% .
+
+                if errorlevel 1 exit /b 1
+
+                echo Pushing versioned image to ECR...
+                docker push %MASTER_IMAGE%
+
+                if errorlevel 1 exit /b 1
+
+                echo Pushing latest image to ECR...
+                docker tag %MASTER_IMAGE% %MASTER_LATEST%
+                docker push %MASTER_LATEST%
+
+                if errorlevel 1 exit /b 1
+
+                echo Master image pushed successfully to ECR.
+            '''
                         }
                     }
                 }
                 stage('Build Document Image') {
                     steps {
                         dir('backend/bbhealthapp-api-document') {
-                            bat '''
-                                docker buildx build --platform linux/amd64 --push -t %DOCUMENT_REPO%:%IMAGE_TAG% -t %DOCUMENT_REPO%:latest .
-                                if errorlevel 1 exit /b 1
-                            '''
+                          bat '''
+                @echo off
+                echo Building Document Docker Image...
+
+                docker build -t %DOCUMENT_IMAGE% .
+
+                if errorlevel 1 exit /b 1
+
+                echo Pushing versioned image to ECR...
+                docker push %DOCUMENT_IMAGE%
+
+                if errorlevel 1 exit /b 1
+
+                echo Pushing latest image to ECR...
+                docker tag %DOCUMENT_IMAGE% %DOCUMENT_LATEST%
+                docker push %DOCUMENT_LATEST%
+
+                if errorlevel 1 exit /b 1
+
+                echo Document image pushed successfully to ECR.
+            '''
                         }
                     }
                 }
                 stage('Build Register Image') {
                     steps {
                         dir('backend/bbhealthapp-api-register') {
-                            bat '''
-                                docker buildx build --platform linux/amd64 --push -t %REGISTER_REPO%:%IMAGE_TAG% -t %REGISTER_REPO%:latest .
-                                if errorlevel 1 exit /b 1
-                            '''
+                             bat '''
+                @echo off
+                echo Building Register Docker Image...
+
+                docker build -t %REGISTER_IMAGE% .
+
+                if errorlevel 1 exit /b 1
+
+                echo Pushing versioned image to ECR...
+                docker push %REGISTER_IMAGE%
+
+                if errorlevel 1 exit /b 1
+
+                echo Pushing latest image to ECR...
+                docker tag %REGISTER_IMAGE% %REGISTER_LATEST%
+                docker push %REGISTER_LATEST%
+
+                if errorlevel 1 exit /b 1
+
+                echo Register image pushed successfully to ECR.
+            '''
                         }
                     }
                 }
@@ -149,22 +202,33 @@ pipeline {
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-credentials',
+                     credentialsId: 'aws-credentials2',
                      accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
-                     sessionTokenVariable: 'AWS_SESSION_TOKEN']
+                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
                 ]) {
                     bat '''
                         echo Updating kubeconfig...
                         aws eks update-kubeconfig --region %AWS_REGION% --name %EKS_CLUSTER%
                         if errorlevel 1 exit /b 1
-                        kubectl create namespace %EKS_NAMESPACE% --dry-run=client -o yaml | kubectl apply -f -
+
+                        echo Verifying EKS API endpoint access...
+                        aws eks describe-cluster --name %EKS_CLUSTER% --region %AWS_REGION% --query "cluster.endpoint" --output text
+                        if errorlevel 1 exit /b 1
+
+                        echo Checking cluster health before deployment...
+                        kubectl --request-timeout=30s get --raw /healthz
+                        kubectl --request-timeout=30s get pods --all-namespaces
+                        kubectl --request-timeout=30s get nodes
+                        if errorlevel 1 exit /b 1
+
+                        kubectl create namespace %EKS_NAMESPACE% --dry-run=client -o yaml > namespace.yaml
+                        kubectl apply -f namespace.yaml
                         if errorlevel 1 exit /b 1
                     '''
                     bat '''
-                        kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-master bbhealthapp-api-master=%MASTER_REPO%:%IMAGE_TAG%
-                        kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-document bbhealthapp-api-document=%DOCUMENT_REPO%:%IMAGE_TAG%
-                        kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-register bbhealthapp-api-register=%REGISTER_REPO%:%IMAGE_TAG%
+                        kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-master bbhealthapp-api-master=%MASTER_IMAGE%
+                        kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-document bbhealthapp-api-document=%DOCUMENT_IMAGE%
+                        kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-register bbhealthapp-api-register=%REGISTER_IMAGE%
                         if errorlevel 1 exit /b 1
                         kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-master --timeout=180s
                         kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-document --timeout=180s
