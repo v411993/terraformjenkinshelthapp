@@ -6,9 +6,11 @@ pipeline {
         AWS_ACCOUNT_ID = '951897726665'
         ECR_REPO_NAME = 'aws-dev-app'
         EKS_CLUSTER_NAME = 'aws-dev-cluster'
+        EKS_NAMESPACE = 'bbhealthapp'
         APP_NAME = 'bbhealthapp-frontend'
         ECR_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
         number = "${env.BUILD_NUMBER}"
+        app = "frontend"
     }
 
     stages {
@@ -121,7 +123,7 @@ stage('3. Build and Test Frontend') {
         stage('Build Docker Image') {
             steps {
                 dir('frontend') {
-                bat ' docker  build  -t %ECR_URI%:%number% -t %ECR_URI%:latest .'
+                bat ' docker build -t %ECR_URI%:%app%-latest .'
                 }
             }
         }
@@ -130,24 +132,32 @@ stage('3. Build and Test Frontend') {
             steps {
                 bat '''
                     aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %AWS_ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/%EKS_CLUSTER_NAME%
-                    docker push %ECR_URI%:%number%
-                    docker push %ECR_URI%:latest
+                    docker push %ECR_URI%:%app%-%number%
+                    docker push %ECR_URI%:%app%-latest
                 '''
             }
         }
 
-        stage('Deploy to EKS') {
+         stage('Deploy to EKS') {
             steps {
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-credentials2',
+                     accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
+                ]) {
                 bat '''
                     echo Updating kubeconfig for EKS cluster...
                     aws eks update-kubeconfig --name %EKS_CLUSTER_NAME% --region %AWS_REGION%
-
+                    kubectl create namespace %EKS_NAMESPACE% --dry-run=client -o yaml > namespace.yaml
+                    kubectl apply -f namespace.yaml
                     echo Creating Kubernetes Deployment manifest...
                     (
                       echo apiVersion: apps/v1
                       echo kind: Deployment
                       echo metadata:
                       echo   name: %APP_NAME%
+                      echo   namespace: %EKS_NAMESPACE%
                       echo   labels:
                       echo     app: %APP_NAME%
                       echo spec:
@@ -162,7 +172,7 @@ stage('3. Build and Test Frontend') {
                       echo     spec:
                       echo       containers:
                       echo         - name: %APP_NAME%
-                      echo           image: %ECR_URI%:%number%
+                      echo           image: %ECR_URI%:latest
                       echo           ports:
                       echo             - containerPort: 80
                     ) > frontend-deployment.yaml
@@ -173,6 +183,7 @@ stage('3. Build and Test Frontend') {
                       echo kind: Service
                       echo metadata:
                       echo   name: %APP_NAME%-service
+                      echo   namespace: %EKS_NAMESPACE%
                       echo spec:
                       echo   type: NodePort
                       echo   selector:
@@ -185,12 +196,16 @@ stage('3. Build and Test Frontend') {
 
                     kubectl apply -f frontend-deployment.yaml
                     kubectl apply -f frontend-service.yaml
-                    kubectl get deployment %APP_NAME%
-                    kubectl get service %APP_NAME%-service
+                    kubectl get -n %EKS_NAMESPACE% deployment %APP_NAME% -o wide
+                    kubectl get -n %EKS_NAMESPACE%  endpoints
+                    kubectl get nodes -o wide
+                    kubectl  get pods -n %EKS_NAMESPACE% -o wide
+                    kubectl get service -n %EKS_NAMESPACE%  %APP_NAME%-service
 
                     echo Application is exposed on NodePort 30080.
                     echo Access URL: http://<EKS-NODE-PUBLIC-IP>:30080
                 '''
+             }
             }
         }
     }

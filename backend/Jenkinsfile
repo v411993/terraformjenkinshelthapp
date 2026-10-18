@@ -206,14 +206,30 @@ pipeline {
                      accessKeyVariable: 'AWS_ACCESS_KEY_ID',
                      secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
                 ]) {
+                    
                     bat '''
-                        echo Updating kubeconfig...
-                        aws eks update-kubeconfig --region %AWS_REGION% --name %EKS_CLUSTER%
+                        echo Force-refreshing kubeconfig for %EKS_CLUSTER%...
+                        set "KUBECONFIG=%USERPROFILE%\\.kube\\config"
+                        if not exist "%USERPROFILE%\\.kube" mkdir "%USERPROFILE%\\.kube"
+                        if exist "%KUBECONFIG%" del /f /q "%KUBECONFIG%"
+
+                        aws sts get-caller-identity
+                        if errorlevel 1 exit /b 1
+
+                        aws eks update-kubeconfig --region %AWS_REGION% --name %EKS_CLUSTER% --kubeconfig "%KUBECONFIG%"
                         if errorlevel 1 exit /b 1
 
                         echo Verifying EKS API endpoint access...
                         aws eks describe-cluster --name %EKS_CLUSTER% --region %AWS_REGION% --query "cluster.endpoint" --output text
                         if errorlevel 1 exit /b 1
+
+                        echo Current kube context:
+                        kubectl config get-credentials
+                        kubectl config current-context
+                        kubectl config get-contexts
+                        kubectl get ns
+                        kubectl logs bbhealthapp-api-document-6cdc9dc7ff-pgqrr -n bbhealthapp
+                        kubectl events deploy bbhealthapp-api-document-6cdc9dc7ff-pgqrr -n bbhealthapp
 
                         echo Checking cluster health before deployment...
                         kubectl --request-timeout=30s get --raw /healthz
@@ -223,13 +239,16 @@ pipeline {
 
                         kubectl create namespace %EKS_NAMESPACE% --dry-run=client -o yaml > namespace.yaml
                         kubectl apply -f namespace.yaml
+                        kubectl get deploy -n %EKS_NAMESPACE%
                         if errorlevel 1 exit /b 1
-                    '''
-                    bat '''
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image=%MASTER_IMAGE%
                         kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-master bbhealthapp-api-master=%MASTER_IMAGE%
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image=%MASTER_IMAGE%
                         kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-document bbhealthapp-api-document=%DOCUMENT_IMAGE%
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image=%MASTER_IMAGE%
                         kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-register bbhealthapp-api-register=%REGISTER_IMAGE%
                         if errorlevel 1 exit /b 1
+                        kubectl get deploy -n %EKS_NAMESPACE%
                         kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-master --timeout=180s
                         kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-document --timeout=180s
                         kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-register --timeout=180s
@@ -239,11 +258,9 @@ pipeline {
         }
     }
     post {
-        always {
-            echo 'Pipeline finished.'
-        }
-        failure {
-            echo 'Build or deployment failed. Check logs above.'
+    success {
+        echo 'Backend-Jenkins yashasvi zala! Frontend-Jenkins trigger karat ahe...'
+        build job: 'Frontend-Jenkins', wait: false
         }
     }
 }

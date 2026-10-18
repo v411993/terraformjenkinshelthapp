@@ -78,4 +78,11 @@ pipeline {
             }
         }
     }
+    post {
+        success {
+            echo 'Build यशस्वी झाला! आता Job 2 ट्रिगर करत आहे...'
+            // हा स्टेप Job 2 ला ट्रिगर करेल
+            build job: 'Backend-Jenkins', wait: false
+        }
+    }
 }
