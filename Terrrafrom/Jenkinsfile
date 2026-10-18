@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    parameters {
+        choice(
+            name: 'ACTION',
+            choices: ['apply', 'destroy'],
+            description: 'Select Terraform action to run'
+        )
+    }
+
     environment {
         TERRAFORM_DIR = 'Terrrafrom'
         AWS_DEFAULT_REGION = 'us-west-2'
@@ -47,7 +55,7 @@ pipeline {
             }
         }
 
-        stage('Terraform Apply') {
+        stage('Terraform Action') {
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
@@ -56,7 +64,15 @@ pipeline {
                      secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
                 ]) {
                     dir("${env.WORKSPACE}\\${env.TERRAFORM_DIR}") {
-                        bat 'terraform apply -auto-approve'
+                        script {
+                            if (params.ACTION == 'apply') {
+                                bat 'terraform apply -auto-approve'
+                            } else if (params.ACTION == 'destroy') {
+                                bat 'terraform destroy -auto-approve'
+                            } else {
+                                error "Unsupported Terraform action: ${params.ACTION}"
+                            }
+                        }
                     }
                 }
             }
