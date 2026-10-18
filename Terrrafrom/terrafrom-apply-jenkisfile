@@ -12,9 +12,7 @@
     stages {
         stage('Checkout Private Repo') {
             steps {
-                git branch: "${env.GIT_BRANCH}",
-                    credentialsId: 'bb-healthapp-git',
-                    url: "${env.GIT_REPO_URL}"
+                git branch: 'main', credentialsId: 'bb-healthapp-git', url: 'https://github.com/v411993/Terraform-jenkins-BBhealthapp.git'
             }
         }
 
