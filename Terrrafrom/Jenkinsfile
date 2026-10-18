@@ -2,7 +2,7 @@
     agent any
 
     environment {
-        BASH_PATH = 'C:\\Users\\q\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe'
+        BASH_PATH = 'C:\Users\q\AppData\Local\Microsoft\WindowsApps\bash.exe'
         TERRAFORM_DIR = 'Terrrafrom'
         AWS_DEFAULT_REGION = 'us-west-2'
         GIT_REPO_URL = 'https://github.com/v411993/Terraform-jenkins-BBhealthapp.git'
@@ -12,7 +12,9 @@
     stages {
         stage('Checkout Private Repo') {
             steps {
-                git branch: 'main', credentialsId: 'bb-healthapp-git', url: 'https://github.com/v411993/terraformjenkinshelthapp.git'
+                git branch: "${env.GIT_BRANCH}",
+                    credentialsId: 'bb-healthapp-git',
+                    url: "${env.GIT_REPO_URL}"
             }
         }
 
