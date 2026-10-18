@@ -23,7 +23,7 @@ pipeline {
         EKS_CLUSTER = "${params.EKS_CLUSTER}"
         EKS_NAMESPACE = "${params.EKS_NAMESPACE}"
         IMAGE_TAG = "${params.IMAGE_TAG}"
-        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${EKS_CLUSTER}"
         MASTER_REPO = "${ECR_REGISTRY}/bbhealthapp-api-master"
         DOCUMENT_REPO = "${ECR_REGISTRY}/bbhealthapp-api-document"
         REGISTER_REPO = "${ECR_REGISTRY}/bbhealthapp-api-register"
@@ -46,7 +46,7 @@ pipeline {
             parallel {
                 stage('Build Master API') {
                     steps {
-                        dir('bbhealthapp-api-master') {
+                        dir('backend/bbhealthapp-api-master') {
                             bat '''
                                 set JAVA_HOME=C:/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot
                                 set MAVEN_HOME=C:/Users/q/Tools/apache-maven-3.9.9
@@ -59,7 +59,7 @@ pipeline {
                 }
                 stage('Build Document API') {
                     steps {
-                        dir('bbhealthapp-api-document') {
+                        dir('backend/bbhealthapp-api-document') {
                             bat '''
                                 set JAVA_HOME=C:/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot
                                 set MAVEN_HOME=C:/Users/q/Tools/apache-maven-3.9.9
@@ -72,7 +72,7 @@ pipeline {
                 }
                 stage('Build Register API') {
                     steps {
-                        dir('bbhealthapp-api-register') {
+                        dir('backend/bbhealthapp-api-register') {
                             bat '''
                                 set JAVA_HOME=C:/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot
                                 set MAVEN_HOME=C:/Users/q/Tools/apache-maven-3.9.9
@@ -112,7 +112,7 @@ pipeline {
             parallel {
                 stage('Build Master Image') {
                     steps {
-                        dir('bbhealthapp-api-master') {
+                        dir('backend/bbhealthapp-api-master') {
                             bat '''
                                 docker buildx build --platform linux/amd64 --push -t %MASTER_REPO%:%IMAGE_TAG% -t %MASTER_REPO%:latest .
                                 if errorlevel 1 exit /b 1
@@ -122,7 +122,7 @@ pipeline {
                 }
                 stage('Build Document Image') {
                     steps {
-                        dir('bbhealthapp-api-document') {
+                        dir('backend/bbhealthapp-api-document') {
                             bat '''
                                 docker buildx build --platform linux/amd64 --push -t %DOCUMENT_REPO%:%IMAGE_TAG% -t %DOCUMENT_REPO%:latest .
                                 if errorlevel 1 exit /b 1
@@ -132,7 +132,7 @@ pipeline {
                 }
                 stage('Build Register Image') {
                     steps {
-                        dir('bbhealthapp-api-register') {
+                        dir('backend/bbhealthapp-api-register') {
                             bat '''
                                 docker buildx build --platform linux/amd64 --push -t %REGISTER_REPO%:%IMAGE_TAG% -t %REGISTER_REPO%:latest .
                                 if errorlevel 1 exit /b 1

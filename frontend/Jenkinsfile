@@ -1,0 +1,112 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'us-west-2'
+        AWS_ACCOUNT_ID = '951897726665'
+        ECR_REPO_NAME = 'bbhealthapp-frontend'
+        EKS_CLUSTER_NAME = 'aws-dev-cluster'
+        APP_NAME = 'bbhealthapp-frontend'
+        ECR_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
+    }
+
+    stages {
+        stage('Checkout Source') {
+            steps {
+                bat 'echo Starting Jenkins build for frontend...'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                bat 'npm install --legacy-peer-deps'
+            }
+        }
+
+        stage('Build Frontend') {
+            steps {
+                bat 'npm run build'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                bat ' docker buildx build --platform linux/amd64 -t %ECR_URI%:%BUILD_NUMBER% -t %ECR_URI%:latest .'
+            }
+        }
+
+        stage('Push Image to ECR') {
+            steps {
+                bat '''
+                    aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %AWS_ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/%EKS_CLUSTER_NAME%
+                    docker push %ECR_URI%:%BUILD_NUMBER%
+                    docker push %ECR_URI%:latest
+                '''
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                bat '''
+                    echo Updating kubeconfig for EKS cluster...
+                    aws eks update-kubeconfig --name %EKS_CLUSTER_NAME% --region %AWS_REGION%
+
+                    echo Creating Kubernetes Deployment manifest...
+                    (
+                      echo apiVersion: apps/v1
+                      echo kind: Deployment
+                      echo metadata:
+                      echo   name: %APP_NAME%
+                      echo   labels:
+                      echo     app: %APP_NAME%
+                      echo spec:
+                      echo   replicas: 2
+                      echo   selector:
+                      echo     matchLabels:
+                      echo       app: %APP_NAME%
+                      echo   template:
+                      echo     metadata:
+                      echo       labels:
+                      echo         app: %APP_NAME%
+                      echo     spec:
+                      echo       containers:
+                      echo         - name: %APP_NAME%
+                      echo           image: %ECR_URI%:%BUILD_NUMBER%
+                      echo           ports:
+                      echo             - containerPort: 80
+                    ) > frontend-deployment.yaml
+
+                    echo Creating Kubernetes Service manifest with NodePort...
+                    (
+                      echo apiVersion: v1
+                      echo kind: Service
+                      echo metadata:
+                      echo   name: %APP_NAME%-service
+                      echo spec:
+                      echo   type: NodePort
+                      echo   selector:
+                      echo     app: %APP_NAME%
+                      echo   ports:
+                      echo     - port: 80
+                      echo       targetPort: 80
+                      echo       nodePort: 30080
+                    ) > frontend-service.yaml
+
+                    kubectl apply -f frontend-deployment.yaml
+                    kubectl apply -f frontend-service.yaml
+                    kubectl get deployment %APP_NAME%
+                    kubectl get service %APP_NAME%-service
+
+                    echo Application is exposed on NodePort 30080.
+                    echo Access URL: http://<EKS-NODE-PUBLIC-IP>:30080
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            bat 'kubectl get svc --all-namespaces'
+        }
+    }
+}
