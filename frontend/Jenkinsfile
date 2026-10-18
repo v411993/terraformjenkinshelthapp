@@ -4,10 +4,11 @@ pipeline {
     environment {
         AWS_REGION = 'us-west-2'
         AWS_ACCOUNT_ID = '951897726665'
-        ECR_REPO_NAME = 'bbhealthapp-frontend'
+        ECR_REPO_NAME = 'aws-dev-app'
         EKS_CLUSTER_NAME = 'aws-dev-cluster'
         APP_NAME = 'bbhealthapp-frontend'
         ECR_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
+        number = "${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -17,21 +18,111 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                bat 'npm install --legacy-peer-deps'
-            }
-        }
+        
+stage('3. Build and Test Frontend') {
+    steps {
+        echo 'STEP 3: Building and testing Frontend...'
 
-        stage('Build Frontend') {
-            steps {
-                bat 'npm run build'
-            }
-        }
+        dir('frontend') {
+            bat '''
+                @echo off
+                setlocal
 
+                echo ========================================
+                echo STEP 3: Build and Test Frontend
+                echo ========================================
+
+                REM Configure Node.js path
+                set "NODE_DIR=C:\\Users\\q\\Tools\\node-v18.20.8-win-x64"
+
+                if not exist "%NODE_DIR%\\node.exe" (
+                    echo ERROR: Node.js not found at %NODE_DIR%
+                    exit /b 1
+                )
+
+                REM Add Node.js to PATH for this step
+                set "PATH=%NODE_DIR%;%PATH%"
+
+                REM Verify Node.js
+                echo Checking Node.js...
+                where node
+                if errorlevel 1 (
+                    echo ERROR: Node.js command failed.
+                    exit /b 1
+                )
+
+                node --version
+                if errorlevel 1 (
+                    echo ERROR: Node.js version check failed.
+                    exit /b 1
+                )
+
+                REM Verify npm
+                echo Checking npm...
+                where npm
+                if errorlevel 1 (
+                    echo ERROR: npm command not found.
+                    exit /b 1
+                )
+
+                call npm --version
+                if errorlevel 1 (
+                    echo ERROR: npm version check failed.
+                    exit /b 1
+                )
+
+                REM Configure Node.js runtime options
+                set "NODE_OPTIONS=--openssl-legacy-provider"
+                set "CI=false"
+
+                REM Install dependencies if node_modules is missing
+                if not exist "node_modules" (
+                    echo Installing frontend dependencies...
+                    call npm ci
+                    if errorlevel 1 (
+                        echo ERROR: Frontend npm ci failed.
+                        exit /b 1
+                    )
+                ) else (
+                    echo node_modules already exists. Skipping npm ci.
+                )
+
+                REM Run frontend tests
+                echo Running frontend tests...
+                call ".\\node_modules\\.bin\\react-scripts.cmd" test --watchAll=false --passWithNoTests
+                if errorlevel 1 (
+                    echo ERROR: Frontend tests failed.
+                    exit /b 1
+                )
+
+                REM Build frontend
+                echo Building frontend...
+                call ".\\node_modules\\.bin\\react-scripts.cmd" build
+                if errorlevel 1 (
+                    echo ERROR: Frontend build failed.
+                    exit /b 1
+                )
+
+                REM Verify build output
+                if not exist "build\\index.html" (
+                    echo ERROR: Frontend build\\index.html is missing.
+                    exit /b 1
+                )
+
+                echo ========================================
+                echo SUCCESS: Frontend tests and build completed.
+                echo ========================================
+
+                endlocal
+            '''
+        }
+    }
+}
         stage('Build Docker Image') {
             steps {
-                bat ' docker buildx build --platform linux/amd64 -t %ECR_URI%:%BUILD_NUMBER% -t %ECR_URI%:latest .'
+                dir('frontend') {
+                bat ' docker  build  -t %ECR_URI%:%number% -t %ECR_URI%:latest .'
+                }
             }
         }
 
@@ -39,7 +130,7 @@ pipeline {
             steps {
                 bat '''
                     aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %AWS_ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/%EKS_CLUSTER_NAME%
-                    docker push %ECR_URI%:%BUILD_NUMBER%
+                    docker push %ECR_URI%:%number%
                     docker push %ECR_URI%:latest
                 '''
             }
@@ -71,7 +162,7 @@ pipeline {
                       echo     spec:
                       echo       containers:
                       echo         - name: %APP_NAME%
-                      echo           image: %ECR_URI%:%BUILD_NUMBER%
+                      echo           image: %ECR_URI%:%number%
                       echo           ports:
                       echo             - containerPort: 80
                     ) > frontend-deployment.yaml
