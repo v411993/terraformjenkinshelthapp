@@ -1,0 +1,202 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(time: 90, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    parameters {
+        booleanParam(
+            name: 'DEPLOY_TO_EKS',
+            defaultValue: false,
+            description: 'Set to true to push Docker images to ECR and deploy to EKS.'
+        )
+        string(
+            name: 'AWS_REGION',
+            defaultValue: 'us-west-2',
+            description: 'AWS region for ECR and EKS.'
+        )
+        string(
+            name: 'AWS_ACCOUNT_ID',
+            defaultValue: '951897726665',
+            description: 'AWS account id where ECR repositories are created.'
+        )
+        string(
+            name: 'EKS_CLUSTER',
+            defaultValue: 'aws-dev-cluster',
+            description: 'EKS cluster name.'
+        )
+        string(
+            name: 'EKS_NAMESPACE',
+            defaultValue: 'bbhealthapp',
+            description: 'Namespace used for deployments.'
+        )
+        string(
+            name: 'IMAGE_TAG',
+            defaultValue: '${BUILD_NUMBER}',
+            description: 'Docker image tag to push to ECR.'
+        )
+    }
+
+    environment {
+        JAVA_HOME = 'C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.101-hotspot'
+        MAVEN_HOME = 'C:\\Users\\q\\Tools\\apache-maven-3.9.9'
+        PATH = "${env.JAVA_HOME}\\bin;${env.MAVEN_HOME}\\bin;${env.PATH}"
+
+        AWS_REGION = "${params.AWS_REGION}"
+        AWS_ACCOUNT_ID = "${params.AWS_ACCOUNT_ID}"
+        EKS_CLUSTER = "${params.EKS_CLUSTER}"
+        EKS_NAMESPACE = "${params.EKS_NAMESPACE}"
+        IMAGE_TAG = "${params.IMAGE_TAG}"
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+        MASTER_REPO = "${ECR_REGISTRY}/bbhealthapp-api-master"
+        DOCUMENT_REPO = "${ECR_REGISTRY}/bbhealthapp-api-document"
+        REGISTER_REPO = "${ECR_REGISTRY}/bbhealthapp-api-register"
+    }
+
+    stages {
+        stage('Checkout and Preflight') {
+            steps {
+                checkout scm
+
+                bat '''
+                    echo Jenkins workspace: %WORKSPACE%
+                    java -version
+                    mvn -version
+                    aws --version
+                    docker --version
+                    kubectl version --client
+                '''
+            }
+        }
+
+        stage('Build Backend Services in Parallel') {
+            parallel {
+                stage('Build Master API') {
+                    steps {
+                        dir('bbhealthapp-api-master') {
+                            bat '''
+                                set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot
+                                set MAVEN_HOME=C:\Users\q\Tools\apache-maven-3.9.9
+                                set PATH=%JAVA_HOME%\bin;%MAVEN_HOME%\bin;%PATH%
+
+                                mvn -B clean test package
+                                if errorlevel 1 exit /b 1
+                            '''
+                        }
+                    }
+                }
+
+                stage('Build Document API') {
+                    steps {
+                        dir('bbhealthapp-api-document') {
+                            bat '''
+                                set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot
+                                set MAVEN_HOME=C:\Users\q\Tools\apache-maven-3.9.9
+                                set PATH=%JAVA_HOME%\bin;%MAVEN_HOME%\bin;%PATH%
+
+                                mvn -B clean test package
+                                if errorlevel 1 exit /b 1
+                            '''
+                        }
+                    }
+                }
+
+                stage('Build Register API') {
+                    steps {
+                        dir('bbhealthapp-api-register') {
+                            bat '''
+                                set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot
+                                set MAVEN_HOME=C:\Users\q\Tools\apache-maven-3.9.9
+                                set PATH=%JAVA_HOME%\bin;%MAVEN_HOME%\bin;%PATH%
+
+                                mvn -B clean test package
+                                if errorlevel 1 exit /b 1
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Login to ECR and Build Docker Images') {
+            when {
+                expression { return params.DEPLOY_TO_EKS == true }
+            }
+            steps {
+                bat '''
+                    echo Logging in to ECR...
+                    aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %ECR_REGISTRY%
+                    if errorlevel 1 exit /b 1
+                '''
+
+                parallel(
+                    {
+                        dir('bbhealthapp-api-master') {
+                            bat '''
+                                docker buildx build --platform linux/amd64 --push -t %MASTER_REPO%:%IMAGE_TAG% -t %MASTER_REPO%:latest .
+                                if errorlevel 1 exit /b 1
+                            '''
+                        }
+                    },
+                    {
+                        dir('bbhealthapp-api-document') {
+                            bat '''
+                                docker buildx build --platform linux/amd64 --push -t %DOCUMENT_REPO%:%IMAGE_TAG% -t %DOCUMENT_REPO%:latest .
+                                if errorlevel 1 exit /b 1
+                            '''
+                        }
+                    },
+                    {
+                        dir('bbhealthapp-api-register') {
+                            bat '''
+                                docker buildx build --platform linux/amd64 --push -t %REGISTER_REPO%:%IMAGE_TAG% -t %REGISTER_REPO%:latest .
+                                if errorlevel 1 exit /b 1
+                            '''
+                        }
+                    }
+                )
+            }
+        }
+
+        stage('Deploy to EKS') {
+            when {
+                expression { return params.DEPLOY_TO_EKS == true }
+            }
+            steps {
+                bat '''
+                    echo Updating kubeconfig...
+                    aws eks update-kubeconfig --region %AWS_REGION% --name %EKS_CLUSTER%
+                    if errorlevel 1 exit /b 1
+
+                    kubectl create namespace %EKS_NAMESPACE% --dry-run=client -o yaml | kubectl apply -f -
+                    if errorlevel 1 exit /b 1
+                '''
+
+                bat '''
+                    kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-master bbhealthapp-api-master=%MASTER_REPO%:%IMAGE_TAG%
+                    kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-document bbhealthapp-api-document=%DOCUMENT_REPO%:%IMAGE_TAG%
+                    kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-register bbhealthapp-api-register=%REGISTER_REPO%:%IMAGE_TAG%
+                    if errorlevel 1 exit /b 1
+
+                    kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-master --timeout=180s
+                    kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-document --timeout=180s
+                    kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-register --timeout=180s
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline finished.'
+        }
+        failure {
+            echo 'Build or deployment failed. Check logs above.'
+        }
+    }
+}
