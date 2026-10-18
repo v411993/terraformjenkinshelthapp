@@ -13,7 +13,7 @@
         stage('Checkout Private Repo') {
             steps {
                 git branch: "${env.GIT_BRANCH}",
-                    credentialsId: 'github-credentials',
+                    credentialsId: 'bb-healthapp-git',
                     url: "${env.GIT_REPO_URL}"
             }
         }
