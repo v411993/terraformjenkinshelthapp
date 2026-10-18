@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        BASH_PATH =  'C:/Users/q/AppData/Local/Microsoft/WindowsApps/bash.exe'
         TERRAFORM_DIR = 'Terrrafrom'
         AWS_DEFAULT_REGION = 'us-west-2'
         GIT_REPO_URL = 'https://github.com/v411993/Terraform-jenkins-BBhealthapp.git'
@@ -22,13 +21,12 @@ pipeline {
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-credentials',
+                     credentialsId: 'aws-credentials2',
                      accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
-                     sessionTokenVariable: 'AWS_SESSION_TOKEN']
+                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
                 ]) {
                     dir("${env.WORKSPACE}\\${env.TERRAFORM_DIR}") {
-                        bat "\"${env.BASH_PATH}\" -lc \"terraform init\""
+                        bat 'terraform init'
                     }
                 }
             }
@@ -38,13 +36,12 @@ pipeline {
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-credentials',
+                     credentialsId: 'aws-credentials2',
                      accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
-                     sessionTokenVariable: 'AWS_SESSION_TOKEN']
+                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
                 ]) {
                     dir("${env.WORKSPACE}\\${env.TERRAFORM_DIR}") {
-                        bat "\"${env.BASH_PATH}\" -lc \"terraform validate\""
+                        bat 'terraform validate'
                     }
                 }
             }
@@ -54,13 +51,12 @@ pipeline {
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-credentials',
+                     credentialsId: 'aws-credentials2',
                      accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY',
-                     sessionTokenVariable: 'AWS_SESSION_TOKEN']
+                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
                 ]) {
                     dir("${env.WORKSPACE}\\${env.TERRAFORM_DIR}") {
-                        bat "\"${env.BASH_PATH}\" -lc \"terraform apply -auto-approve\""
+                        bat 'terraform apply -auto-approve'
                     }
                 }
             }
