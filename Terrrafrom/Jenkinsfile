@@ -79,10 +79,14 @@ pipeline {
         }
     }
     post {
-        success {
-            echo 'Build यशस्वी झाला! आता Job 2 ट्रिगर करत आहे...'
-            // हा स्टेप Job 2 ला ट्रिगर करेल
-            build job: 'Backend-Jenkins', wait: false
+    always {
+        script {
+            if (params.ACTION == 'apply') {
+                // This will ONLY run when action is 'apply'
+                echo "Running post-actions for apply..."
+            } else {
+                echo "Skipping post-actions for destroy."
+            }
         }
     }
 }
