@@ -30,6 +30,10 @@ pipeline {
         MASTER_LATEST = "${ECR_REPO}:bbhealthapp-api-master-latest"
         DOCUMENT_LATEST = "${ECR_REPO}:bbhealthapp-api-document-latest"
         REGISTER_LATEST = "${ECR_REPO}:bbhealthapp-api-register-latest"
+        MASTER_DIR   = 'application/backend/bbhealthapp-api-master'
+        DOCUMENT_DIR = 'application/backend/bbhealthapp-api-document'
+        REGISTER_DIR = 'application/backend/bbhealthapp-api-register'
+        
     }
     stages {
         stage('Checkout and Preflight') {
@@ -117,9 +121,11 @@ pipeline {
                         dir('backend/bbhealthapp-api-master') {
                             bat '''
                 @echo off
-                echo Building Master Docker Image...
+                echo Building Master Docker Image from workspace...
+                echo Dockerfile path: %WORKSPACE%/backend/bbhealthapp-api-master/Dockerfile
+                echo Context path: %WORKSPACE%/backend/bbhealthapp-api-master
 
-                docker build -t %MASTER_IMAGE% .
+                docker build -f "%WORKSPACE%/backend/bbhealthapp-api-master/Dockerfile" -t %MASTER_IMAGE% "%WORKSPACE%/backend/bbhealthapp-api-master"
 
                 if errorlevel 1 exit /b 1
 
@@ -144,9 +150,11 @@ pipeline {
                         dir('backend/bbhealthapp-api-document') {
                           bat '''
                 @echo off
-                echo Building Document Docker Image...
+                echo Building Document Docker Image from workspace...
+                echo Dockerfile path: %WORKSPACE%/backend/bbhealthapp-api-document/Dockerfile
+                echo Context path: %WORKSPACE%/backend/bbhealthapp-api-document
 
-                docker build -t %DOCUMENT_IMAGE% .
+                docker build -f "%WORKSPACE%/backend/bbhealthapp-api-document/Dockerfile" -t %DOCUMENT_IMAGE% "%WORKSPACE%/backend/bbhealthapp-api-document"
 
                 if errorlevel 1 exit /b 1
 
@@ -171,9 +179,11 @@ pipeline {
                         dir('backend/bbhealthapp-api-register') {
                              bat '''
                 @echo off
-                echo Building Register Docker Image...
+                echo Building Register Docker Image from workspace...
+                echo Dockerfile path: %WORKSPACE%/backend/bbhealthapp-api-register/Dockerfile
+                echo Context path: %WORKSPACE%/backend/bbhealthapp-api-register
 
-                docker build -t %REGISTER_IMAGE% .
+                docker build -f "%WORKSPACE%/backend/bbhealthapp-api-register/Dockerfile" -t %REGISTER_IMAGE% "%WORKSPACE%/backend/bbhealthapp-api-register"
 
                 if errorlevel 1 exit /b 1
 
@@ -243,7 +253,7 @@ pipeline {
                         if errorlevel 1 exit /b 1
                         kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image=%MASTER_IMAGE%
                         kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-master bbhealthapp-api-master=%MASTER_IMAGE%
-                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image=%MASTER_IMAGE%
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image=%DOCUMENT_IMAGE%
                         kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-document bbhealthapp-api-document=%DOCUMENT_IMAGE%
                         kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image=%MASTER_IMAGE%
                         kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-register bbhealthapp-api-register=%REGISTER_IMAGE%
