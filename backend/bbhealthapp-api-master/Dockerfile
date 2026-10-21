@@ -1,5 +1,5 @@
 ﻿FROM eclipse-temurin:11-jre
-
+ENV TOKEN_SECRET=""
 WORKDIR /app
 
 COPY target/bbhealthapp-api-0.0.1-SNAPSHOT.jar app.jar
