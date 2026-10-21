@@ -6,21 +6,21 @@ pipeline {
         timeout(time: 90, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '20'))
     }
-    parameters {
+   /* parameters {
         booleanParam(name: 'DEPLOY_TO_EKS', defaultValue: false, description: 'Set to true to push Docker images to ECR and deploy to EKS.')
         string(name: 'AWS_REGION', defaultValue: 'us-west-2', description: 'AWS region for ECR and EKS.')
         string(name: 'AWS_ACCOUNT_ID', defaultValue: '951897726665', description: 'AWS account id where ECR repositories are created.')
         string(name: 'EKS_CLUSTER', defaultValue: 'aws-dev-cluster', description: 'EKS cluster name.')
         string(name: 'EKS_NAMESPACE', defaultValue: 'bbhealthapp', description: 'Namespace used for deployments.')
-        }
+        }*/
     environment {
         JAVA_HOME = 'C:/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot'
         MAVEN_HOME = 'C:/Users/q/Tools/apache-maven-3.9.9'
         PATH = "${env.JAVA_HOME}/bin;${env.MAVEN_HOME}/bin;${env.PATH}"
-        AWS_REGION = "${params.AWS_REGION}"
-        AWS_ACCOUNT_ID = "${params.AWS_ACCOUNT_ID}"
-        EKS_CLUSTER = "${params.EKS_CLUSTER}"
-        EKS_NAMESPACE = "${params.EKS_NAMESPACE}"
+        AWS_REGION = 'us-west-2'
+        AWS_ACCOUNT_ID = '951897726665'
+        EKS_CLUSTER = 'aws-dev-cluster'
+        EKS_NAMESPACE = 'bbhealthapp'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         ECR_REPO = "${ECR_REGISTRY}/aws-dev-app"
@@ -93,9 +93,7 @@ pipeline {
             }
         }
         stage('Login to ECR') {
-            when {
-                expression { return params.DEPLOY_TO_EKS == true }
-            }
+           
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
@@ -112,9 +110,7 @@ pipeline {
             }
         }
         stage('Build and Push Docker Images in Parallel') {
-            when {
-                expression { return params.DEPLOY_TO_EKS == true }
-            }
+           
             parallel {
                 stage('Build Master Image') {
                     steps {
@@ -206,9 +202,7 @@ pipeline {
             }
         }
         stage('Deploy to EKS') {
-            when {
-                expression { return params.DEPLOY_TO_EKS == true }
-            }
+           
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
@@ -234,13 +228,18 @@ pipeline {
                         if errorlevel 1 exit /b 1
 
                         echo Current kube context:
-                        kubectl config get-credentials
+                       
                         kubectl config current-context
                         kubectl config get-contexts
+                        REM Get the EKS cluster endpoint and save it to a file
+                        aws eks describe-cluster --name aws-dev-cluster --region us-west-2 --query "cluster.endpoint" --output text
+                        aws eks describe-cluster --name aws-dev-cluster --region us-west-2 --query "cluster.endpoint" --output text > eks-endpoint.txt
+                        aws eks update-kubeconfig --name aws-dev-cluster --region us-west-2
+                        
+                        
                         kubectl get ns
-                        kubectl logs bbhealthapp-api-document-6cdc9dc7ff-pgqrr -n bbhealthapp
-                        kubectl events deploy bbhealthapp-api-document-6cdc9dc7ff-pgqrr -n bbhealthapp
-
+                       
+                       
                         echo Checking cluster health before deployment...
                         kubectl --request-timeout=30s get --raw /healthz
                         kubectl --request-timeout=30s get pods --all-namespaces

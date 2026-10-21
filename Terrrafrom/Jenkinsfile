@@ -55,6 +55,29 @@ pipeline {
             }
         }
 
+        stage('Delete ECR Images Before Destroy') {
+            when {
+                expression { params.ACTION == 'destroy' }
+            }
+            steps {
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-credentials2',
+                     accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
+                ]) {
+                    bat '''
+                        for /f "delims=" %%i in ('aws ecr describe-repositories --query "repositories[].repositoryName" --output text --region %AWS_DEFAULT_REGION% 2^>nul') do (
+                            echo Deleting images in repository: %%i
+                            for /f "delims=" %%d in ('aws ecr list-images --repository-name %%i --query "imageIds[*].imageDigest" --output text --region %AWS_DEFAULT_REGION% 2^>nul') do (
+                                aws ecr batch-delete-image --repository-name %%i --image-ids imageDigest=%%d --region %AWS_DEFAULT_REGION%
+                            )
+                        )
+                    '''
+                }
+            }
+        }
+
         stage('Terraform Action') {
             steps {
                 withCredentials([
