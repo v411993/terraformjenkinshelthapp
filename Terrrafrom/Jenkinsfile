@@ -89,7 +89,13 @@ pipeline {
                     dir("${env.WORKSPACE}\\${env.TERRAFORM_DIR}") {
                         script {
                             if (params.ACTION == 'apply') {
+                            
                                 bat 'terraform apply -auto-approve'
+                                bat '''
+                                 aws eks describe-cluster --name aws-dev-cluster --region us-west-2 --query "cluster.endpoint" --output text
+                                 aws eks describe-cluster --name aws-dev-cluster --region us-west-2 --query "cluster.endpoint" --output text > eks-endpoint.txt
+                                 aws eks update-kubeconfig --name aws-dev-cluster --region us-west-2
+                                '''
                             } else if (params.ACTION == 'destroy') {
                                 bat 'terraform destroy -auto-approve'
                             } else {
@@ -107,6 +113,10 @@ pipeline {
             if (params.ACTION == 'apply') {
                 // This will ONLY run when action is 'apply'
                 echo "Running post-actions for apply..."
+				success {
+                    echo 'Backend-Jenkins yashasvi zala! Backend-Jenkins trigger karat ahe...'
+                    build job: 'Backend-Jenkins', wait: false
+                }
             } else {
                 echo "Skipping post-actions for destroy."
             }
