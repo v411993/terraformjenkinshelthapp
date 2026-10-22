@@ -59,6 +59,6 @@ class GovernmentAuthorityControllerWebApplicationTest {
                 .andExpect(status().isOk())
                 .andDo(print())
                 .andExpect(jsonPath("$.length()", greaterThan(1)));
-    }
-*/
+    }*/
+
 }

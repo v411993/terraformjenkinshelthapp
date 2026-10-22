@@ -20,7 +20,7 @@ public interface TestRequestRepository extends JpaRepository<TestRequest,Long> {
 	List<TestRequest> findByEmail(String email);
 	List<TestRequest> findByPhoneNumber(String phoneNumber);
 
-	void deleteByRequestId(Long id);
+	void deleteById(Long id);
 
 
 

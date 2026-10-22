@@ -119,7 +119,7 @@ pipeline {
                 @echo off
                 echo Building Master Docker Image from workspace...
                 echo Dockerfile path: %WORKSPACE%/backend/bbhealthapp-api-master/Dockerfile
-                echo Context path: %WORKSPACE%/backend/bbhealthapp-api-master
+                echo Context path: %WORKSPACE%/backend/bbhealthapp-api-master/target
 
                 docker build -f "%WORKSPACE%/backend/bbhealthapp-api-master/Dockerfile" -t %MASTER_IMAGE% "%WORKSPACE%/backend/bbhealthapp-api-master"
 
@@ -148,7 +148,7 @@ pipeline {
                 @echo off
                 echo Building Document Docker Image from workspace...
                 echo Dockerfile path: %WORKSPACE%/backend/bbhealthapp-api-document/Dockerfile
-                echo Context path: %WORKSPACE%/backend/bbhealthapp-api-document
+                echo Context path: %WORKSPACE%/backend/bbhealthapp-api-document/target
 
                 docker build -f "%WORKSPACE%/backend/bbhealthapp-api-document/Dockerfile" -t %DOCUMENT_IMAGE% "%WORKSPACE%/backend/bbhealthapp-api-document"
 
@@ -216,49 +216,35 @@ pipeline {
                         set "KUBECONFIG=%USERPROFILE%\\.kube\\config"
                         if not exist "%USERPROFILE%\\.kube" mkdir "%USERPROFILE%\\.kube"
                         if exist "%KUBECONFIG%" del /f /q "%KUBECONFIG%"
-
                         aws sts get-caller-identity
                         if errorlevel 1 exit /b 1
-
                         aws eks update-kubeconfig --region %AWS_REGION% --name %EKS_CLUSTER% --kubeconfig "%KUBECONFIG%"
                         if errorlevel 1 exit /b 1
-
-                        
                         echo Current kube context:
-                       
                         kubectl config current-context
                         kubectl config get-contexts
-                        REM Get the EKS cluster endpoint and save it to a file
                         
                         REM --- 1. Get the current public IP of the Jenkins agent dynamically ---
-			for /f "delims=" %%i in ('curl -s https://api.ipify.org') do set "JENKINS_IP=%%i"
-			echo Detected Jenkins Agent Public IP: %JENKINS_IP%
-
-			REM --- 2. Automatically update the EKS cluster config to include this IP ---
-			echo Updating EKS public access CIDRs to allow %JENKINS_IP%...
-			aws eks update-cluster-config ^
-  			--name aws-dev-cluster ^
-  			--region us-west-2 ^
-  			--resources-vpc-config endpointPublicAccess=true,endpointPrivateAccess=true,publicAccessCidrs="106.219.134.237/32,%JENKINS_IP%/32"
-
-			REM --- 3. (Optional) Wait a few seconds for AWS to propagate the change if needed ---
-			timeout /t 10 /nobreak >nul
-
-			REM --- 4. Continue with your existing commands ---
-			echo Current kube context:
-			kubectl config current-context
-
-			aws eks describe-cluster --name aws-dev-cluster --region us-west-2 --query "cluster.endpoint" --output text > eks-endpoint.txt
-
-			aws eks update-kubeconfig --name aws-dev-cluster --region us-west-2
+			            for /f "delims=" %%i in ('curl -s https://api.ipify.org') do set "JENKINS_IP=%%i"
+			            echo Detected Jenkins Agent Public IP: %JENKINS_IP%
+			            
+                        REM --- 2. Automatically update the EKS cluster config to include this IP ---
+			            echo Updating EKS public access CIDRs to allow %JENKINS_IP%...
+                        aws eks update-cluster-config ^
+                        --name aws-dev-cluster ^
+                        --region us-west-2 ^
+                        --resources-vpc-config endpointPublicAccess=true,endpointPrivateAccess=true,publicAccessCidrs="106.219.134.237/32,%JENKINS_IP%/32"
+                        
+                        REM --- 3. (Optional) Wait a few seconds for AWS to propagate the change if needed ---
+                        timeout /t 10 /nobreak >nul
+                        
+                        REM --- 4. Continue with your existing commands ---
+                        echo Current kube context:
+                        kubectl config current-context
+                        aws eks describe-cluster --name aws-dev-cluster --region us-west-2 --query "cluster.endpoint" --output text > eks-endpoint.txt
+                        aws eks update-kubeconfig --name aws-dev-cluster --region us-west-2
                         
                         kubectl get ns
-                        echo Checking cluster health before deployment...
-                        kubectl --request-timeout=30s get --raw /healthz
-                        kubectl --request-timeout=30s get pods --all-namespaces
-                        kubectl --request-timeout=30s get nodes
-                        if errorlevel 1 exit /b 1
-
                         kubectl create namespace %EKS_NAMESPACE% --dry-run=client -o yaml > namespace.yaml
                         kubectl apply -f namespace.yaml
                         kubectl get deploy -n %EKS_NAMESPACE%
@@ -266,13 +252,15 @@ pipeline {
                         kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image=%MASTER_IMAGE%
                         kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image=%DOCUMENT_IMAGE%
                         kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image=%MASTER_IMAGE%
-			kubectl get deploy -n %EKS_NAMESPACE% 
-			timeout /t 60 /nobreak > nul
-			kubectl get deploy -n  %EKS_NAMESPACE% 
+			            kubectl get deploy,svc -n %EKS_NAMESPACE% 
+			            timeout /t 60 /nobreak > nul
+			            kubectl get deploy,svc -n  %EKS_NAMESPACE%
+                        goto :EndComment
                         kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-register bbhealthapp-api-register=%REGISTER_IMAGE%
-			kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-master bbhealthapp-api-master=%MASTER_IMAGE%
-			kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-document bbhealthapp-api-document=%DOCUMENT_IMAGE%
+			            kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-master bbhealthapp-api-master=%MASTER_IMAGE%
+			            kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-document bbhealthapp-api-document=%DOCUMENT_IMAGE%
                         if errorlevel 1 exit /b 1
+                        :EndComment
                         kubectl get deploy -n %EKS_NAMESPACE%
                         kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-master --timeout=180s
                         kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-document --timeout=180s

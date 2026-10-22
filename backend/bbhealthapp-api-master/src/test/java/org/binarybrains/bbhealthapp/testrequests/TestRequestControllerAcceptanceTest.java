@@ -103,7 +103,7 @@ class TestRequestControllerAcceptanceTest {
         MatcherAssert.assertThat(result.getStatus(),equalTo(RequestStatus.INITIATED));
 
 
-    } */
+    }*/
 
     public CreateTestRequest createTestRequestWith(String user, String phoneNumber) {
         CreateTestRequest createTestRequest = new CreateTestRequest();

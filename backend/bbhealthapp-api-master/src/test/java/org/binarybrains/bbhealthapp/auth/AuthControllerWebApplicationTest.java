@@ -48,6 +48,6 @@ class AuthControllerWebApplicationTest {
                 .andExpect(jsonPath("$.status", equalTo(AccountStatus.INITIATED.name())));
 
 
-    } */
+    }*/
 
 }

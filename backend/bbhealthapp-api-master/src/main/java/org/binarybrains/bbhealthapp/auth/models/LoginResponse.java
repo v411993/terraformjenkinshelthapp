@@ -1,25 +1,12 @@
-package org.binarybrains.bbhealthapp.auth.models;
-
-import lombok.Data;
-
-@Data
 public class LoginResponse {
-
-
-    private String userName;
-    private String message;
     private String token;
+    private Object user;
 
-    public LoginResponse(){
-
-    }
-    public LoginResponse(String userName, String message, String token) {
-        super();
-        this.userName = userName;
-        this.message = message;
+    public LoginResponse(String token, Object user) {
         this.token = token;
+        this.user = user;
     }
-	public String getToken() {
-		return token;
-	}
+
+    public String getToken() { return token; }
+    public Object getUser() { return user; }
 }

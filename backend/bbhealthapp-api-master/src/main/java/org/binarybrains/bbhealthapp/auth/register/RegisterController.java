@@ -30,17 +30,20 @@ public class RegisterController {
     }
 
 
-    @RequestMapping(value = "/auth/newuser", method = RequestMethod.POST)
+    @RequestMapping(value = "/auth/register", method = RequestMethod.POST)
     public User saveUser(@RequestBody RegisterRequest user) {
+
         try {
             return registerService.addUser(user);
         } catch (AppException e) {
             throw   asBadRequest(e.getMessage());
         }
+
+
     }
 
 
-    @RequestMapping(value = "/auth/newdoctor", method = RequestMethod.POST)
+    @RequestMapping(value = "/auth/doctor/register", method = RequestMethod.POST)
     public User saveDoctor(@RequestBody RegisterRequest user) {
 
         try {
@@ -51,7 +54,7 @@ public class RegisterController {
     }
 
 
-    @RequestMapping(value = "/auth/newtester", method = RequestMethod.POST)
+    @RequestMapping(value = "/auth/tester/register", method = RequestMethod.POST)
     public User saveTester(@RequestBody RegisterRequest user) {
 
         try {
