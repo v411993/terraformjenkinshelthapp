@@ -11,6 +11,7 @@ pipeline {
         ECR_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
         number = "${env.BUILD_NUMBER}"
         app = "frontend"
+        KUBECONFIG   = "${WORKSPACE}/.kube/config"
     }
 
     stages {
@@ -136,8 +137,7 @@ stage('3. Build and Test Frontend') {
                     docker push %ECR_URI%:%app%-latest
                 '''
             }
-        }
-
+        }       
          stage('Deploy to EKS') {
             steps {
                 withCredentials([
@@ -147,8 +147,7 @@ stage('3. Build and Test Frontend') {
                      secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
                 ]) {
                 bat '''
-                    echo Updating kubeconfig for EKS cluster...
-                    aws eks update-kubeconfig --name %EKS_CLUSTER_NAME% --region %AWS_REGION%
+                    kubectl get nodes -o wide
                     kubectl create namespace %EKS_NAMESPACE% --dry-run=client -o yaml > namespace.yaml
                     kubectl apply -f namespace.yaml
                     echo Creating Kubernetes Deployment manifest...
@@ -201,7 +200,6 @@ stage('3. Build and Test Frontend') {
                     kubectl get nodes -o wide
                     kubectl  get pods -n %EKS_NAMESPACE% -o wide
                     kubectl get service -n %EKS_NAMESPACE%  %APP_NAME%-service
-
                     echo Application is exposed on NodePort 30080.
                     echo Access URL: http://<EKS-NODE-PUBLIC-IP>:30080
                 '''
