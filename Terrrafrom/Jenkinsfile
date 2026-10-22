@@ -55,12 +55,7 @@ pipeline {
             }
         }
 
-        stage('Delete ECR Images Before Destroy') {
-            when {
-                expression { params.ACTION == 'destroy' }
-            }
         
-        }
 
         stage('Terraform Action') {
             steps {
@@ -97,7 +92,9 @@ pipeline {
             if (params.ACTION == 'apply') {
                 // This will ONLY run when action is 'apply'
                 echo "Running post-actions for apply..."
-				success {
+                
+                // Check if the current build is successful
+                if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
                     echo 'Backend-Jenkins yashasvi zala! Backend-Jenkins trigger karat ahe...'
                     build job: 'Backend-Jenkins', wait: false
                 }
@@ -105,6 +102,6 @@ pipeline {
                 echo "Skipping post-actions for destroy."
             }
         }
-      }
-  }
+    }
+ }
 }

@@ -18,7 +18,7 @@ public class BbhealthappApplication {
 
 		String fileName = System.getProperty("user.home") + File.separator + "bbhealthappApp.pid";
 		SpringApplication application = new SpringApplication(BbhealthappApplication.class);
-		log.info("Updated Process Id is available on " + fileName);
+		//log.info("Updated Process Id is available on " + fileName);
 		application.addListeners(new ApplicationPidFileWriter(fileName));
 		application.run();
 	}  
