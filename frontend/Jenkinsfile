@@ -125,6 +125,7 @@ stage('3. Build and Test Frontend') {
             steps {
                 dir('frontend') {
                 bat ' docker build -t %ECR_URI%:%app%-latest .'
+                #bat 'docker build -f "%WORKSPACE%/frontend/Dockerfile" -t %ECR_URI%:%app%-latest "%WORKSPACE%/frontend"'
                 }
             }
         }
@@ -132,7 +133,7 @@ stage('3. Build and Test Frontend') {
         stage('Push Image to ECR') {
             steps {
                 bat '''
-                    aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %AWS_ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/%EKS_CLUSTER_NAME%
+                   REM aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %AWS_ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/%EKS_CLUSTER_NAME%
                     docker push %ECR_URI%:%app%-%number%
                     docker push %ECR_URI%:%app%-latest
                 '''
@@ -201,16 +202,11 @@ stage('3. Build and Test Frontend') {
                     kubectl  get pods -n %EKS_NAMESPACE% -o wide
                     kubectl get service -n %EKS_NAMESPACE%  %APP_NAME%-service
                     echo Application is exposed on NodePort 30080.
-                    echo Access URL: http://<EKS-NODE-PUBLIC-IP>:30080
+                    echo Access URL: http://<EKS-NODE-PUBLIC-IP>:30080"
+					kubectl get svc --all-namespaces
                 '''
              }
             }
-        }
-    }
-
-    post {
-        always {
-            bat 'kubectl get svc --all-namespaces'
         }
     }
 }
