@@ -39,3 +39,21 @@ variable "private_node_group" {
     subnet_ids     = list(string)
   })
 }
+
+variable "cluster_endpoint_private_access" {
+  description = "Whether the Amazon EKS private API server endpoint is enabled"
+  type        = bool
+  default     = true
+}
+
+variable "cluster_endpoint_public_access" {
+  description = "Whether the Amazon EKS public API server endpoint is enabled"
+  type        = bool
+  default     = true
+}
+
+variable "cluster_endpoint_public_access_cidrs" {
+  description = "List of CIDR blocks that can access the public Amazon EKS API server endpoint"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
