@@ -133,7 +133,7 @@ stage('3. Build and Test Frontend') {
         stage('Push Image to ECR') {
             steps {
                 bat '''
-                   REM aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %AWS_ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/%EKS_CLUSTER_NAME%
+                    powershell -NoProfile -Command "$p = aws ecr get-login-password --region %AWS_REGION%; echo $p | docker login --username AWS --password-stdin %AWS_ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/%EKS_CLUSTER_NAME%"
                     docker push %ECR_URI%:%app%-%number%
                     docker push %ECR_URI%:%app%-latest
                 '''
@@ -148,6 +148,7 @@ stage('3. Build and Test Frontend') {
                      secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
                 ]) {
                 bat '''
+                    aws eks update-kubeconfig --region %AWS_REGION% --name %EKS_CLUSTER%
                     kubectl get nodes -o wide
                     kubectl create namespace %EKS_NAMESPACE% --dry-run=client -o yaml > namespace.yaml
                     kubectl apply -f namespace.yaml
@@ -202,8 +203,8 @@ stage('3. Build and Test Frontend') {
                     kubectl  get pods -n %EKS_NAMESPACE% -o wide
                     kubectl get service -n %EKS_NAMESPACE%  %APP_NAME%-service
                     echo Application is exposed on NodePort 30080.
-                    echo Access URL: http://<EKS-NODE-PUBLIC-IP>:30080"
-					kubectl get svc --all-namespaces
+                    echo Access URL: http://<EKS-NODE-PUBLIC-IP>:30080
+                    kubectl get svc --all-namespaces
                 '''
              }
             }
