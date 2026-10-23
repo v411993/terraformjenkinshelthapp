@@ -1,8 +1,8 @@
 # Find Own machine public ip address
 
-# data "http" "my_ip" {
-#   url = "https://api.ipify.org"
-# }
+ data "http" "my_ip" {
+   url = "https://api.ipify.org"
+ }
 
 
 # VPC Module
@@ -36,11 +36,11 @@ module "eks" {
     subnet_ids     = module.vpc.public_subnet_ids
   }
   
-  # cluster_endpoint_private_access = true
-  # cluster_endpoint_public_access  = true
-  # cluster_endpoint_public_access_cidrs = [
-  #   "${chomp(data.http.my_ip.response_body)}/32"
-  # ]
+   cluster_endpoint_private_access = true
+   cluster_endpoint_public_access  = true
+   cluster_endpoint_public_access_cidrs = [
+     "${chomp(data.http.my_ip.response_body)}/32"
+   ]
   # Private node group
   private_node_group = {
     instance_types = ["t3.medium"]

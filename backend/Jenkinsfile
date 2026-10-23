@@ -217,18 +217,37 @@ pipeline {
                         kubectl apply -f namespace.yaml
                         kubectl get deploy -n %EKS_NAMESPACE%
                         if errorlevel 1 exit /b 1
-                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image=%MASTER_IMAGE%
-                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image=%DOCUMENT_IMAGE%
-                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image=%MASTER_IMAGE%
-			            kubectl get deploy,svc -n %EKS_NAMESPACE% 
-			            timeout /t 60 /nobreak > nul
-			            kubectl get deploy -n  %EKS_NAMESPACE%
-						kubectl get svc -n  %EKS_NAMESPACE%
-						kubectl get endpoints -n  %EKS_NAMESPACE%
-                        goto :EndComment
-                        kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-register bbhealthapp-api-register=%REGISTER_IMAGE%
-			            kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-master bbhealthapp-api-master=%MASTER_IMAGE%
-			            kubectl -n %EKS_NAMESPACE% set image deployment/bbhealthapp-api-document bbhealthapp-api-document=%DOCUMENT_IMAGE%
+                        # 1. Create and deploy bbhealthapp-api-master
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image=%MASTER_IMAGE% --dry-run=client -o yaml ^ 
+                        | kubectl set env -f - --local rootURL="https://localhosts:8001" token.secret="${TOKEN_SECRET}" file.upload-dir="${FILE_UPLOAD_DIR:-/app/uploads}" ^
+                        | kubectl apply -f -
+
+                        # 2. Create and deploy bbhealthapp-api-document
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image=%DOCUMENT_IMAGE% --dry-run=client -o yaml ^
+                         | kubectl set env -f - --local rootURL="https://localhosts:8002" token.secret="${TOKEN_SECRET}" file.upload-dir="${FILE_UPLOAD_DIR:-/app/uploads}" ^
+                         | kubectl apply -f -
+
+                        # 3. Create and deploy bbhealthapp-api-register
+                        # Note: Fixed the image reference to %REGISTER_IMAGE% based on your previous snippet
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image=%REGISTER_IMAGE% --dry-run=client -o yaml ^
+                         | kubectl set env -f - --local rootURL="https://localhosts:8003" token.secret="${TOKEN_SECRET}" file.upload-dir="${FILE_UPLOAD_DIR:-/app/uploads}" ^
+                         | kubectl apply -f -
+                        # Exopose the Services
+                        kubectl -n %EKS_NAMESPACE% expose deployment bbhealthapp-api-master ^
+                        --name=bbhealthapp-service-master ^
+                        --port=8001 ^
+                        --target-port=8080 ^
+                        --type=ClusterIP
+                        kubectl -n %EKS_NAMESPACE% expose deployment bbhealthapp-api-document ^
+                        --name=bbhealthapp-service-document ^
+                        --port=8002 ^
+                        --target-port=8080 ^
+                        --type=ClusterIP
+                        kubectl -n %EKS_NAMESPACE% expose deployment bbhealthapp-api-register \
+                        --name=bbhealthapp-service-register \
+                        --port=8003 \
+                        --target-port=8080 \
+                        --type=ClusterIP
                         if errorlevel 1 exit /b 1
                         :EndComment
                         kubectl get deploy -n %EKS_NAMESPACE%
@@ -238,6 +257,7 @@ pipeline {
 						timeout /t 180 /nobreak > nul
 						kubectl get deploy -n  %EKS_NAMESPACE%
                     '''
+                   
                 }
             }
         }
