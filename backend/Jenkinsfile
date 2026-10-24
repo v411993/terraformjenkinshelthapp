@@ -220,59 +220,60 @@ pipeline {
                         if errorlevel 1 exit /b 1
                         REM Apply the deployment YAML files
                         
-@echo off
-setlocal
+                        @echo off
+                        setlocal
 
-:: ==========================================
-:: 1. Document Deployment
-:: ==========================================
-kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image="%DOCUMENT_IMAGE%" --dry-run=client -o yaml > document-deploy.yaml
-if errorlevel 1 exit /b 1
-kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image="%DOCUMENT_IMAGE%"
-kubectl -n %EKS_NAMESPACE% set env -f document-deploy.yaml ^
-  rootURL=https://localhost:8002 ^
-  token.secret="%TOKEN_SECRET%" ^
-  file.upload-dir=/app/uploads
+                        :: ==========================================
+                        :: 1. Document Deployment
+                        :: ==========================================
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image="%DOCUMENT_IMAGE%" --dry-run=client -o yaml > document-deploy.yaml
+                        if errorlevel 1 exit /b 1
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image="%DOCUMENT_IMAGE%"
+                        kubectl -n %EKS_NAMESPACE% set env -f document-deploy.yaml ^
+                        rootURL=https://localhost:8002 ^
+                        token.secret="%TOKEN_SECRET%" ^
+                        file.upload-dir=/app/uploads
 
-if errorlevel 1 exit /b 1
+                        if errorlevel 1 exit /b 1
 
-kubectl -n %EKS_NAMESPACE% apply -f document-deploy.yaml
-if errorlevel 1 exit /b 1
+                        kubectl -n %EKS_NAMESPACE% apply -f document-deploy.yaml
+                        if errorlevel 1 exit /b 1
 
-:: ==========================================
-:: 2. Register Deployment
-:: ==========================================
-kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image="%REGISTER_IMAGE%" --dry-run=client -o yaml > register-deploy.yaml
-if errorlevel 1 exit /b 1
-kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image="%REGISTER_IMAGE%"
-kubectl -n %EKS_NAMESPACE% set env -f register-deploy.yaml ^
-  rootURL=https://localhost:8003 ^
-  token.secret="%TOKEN_SECRET%" ^
-  file.upload-dir=/app/uploads
+                        :: ==========================================
+                        :: 2. Register Deployment
+                        :: ==========================================
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image="%REGISTER_IMAGE%" --dry-run=client -o yaml > register-deploy.yaml
+                        if errorlevel 1 exit /b 1
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image="%REGISTER_IMAGE%"
+                        kubectl -n %EKS_NAMESPACE% set env -f register-deploy.yaml ^
+                        rootURL=https://localhost:8003 ^
+                        token.secret="%TOKEN_SECRET%" ^
+                        file.upload-dir=/app/uploads
 
-if errorlevel 1 exit /b 1
+                        if errorlevel 1 exit /b 1
 
-kubectl -n %EKS_NAMESPACE% apply -f register-deploy.yaml
-if errorlevel 1 exit /b 1
+                        kubectl -n %EKS_NAMESPACE% apply -f register-deploy.yaml
+                        if errorlevel 1 exit /b 1
 
-:: ==========================================
-:: 3. Master Deployment
-:: ==========================================
-kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image="%MASTER_IMAGE%" --dry-run=client -o yaml > master-deploy.yaml
-if errorlevel 1 exit /b 1
-kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image="%MASTER_IMAGE%" 
-kubectl -n %EKS_NAMESPACE% set env -f master-deploy.yaml ^
-  rootURL=https://localhost:8001 ^
-  token.secret="%TOKEN_SECRET%" ^
-  file.upload-dir=/app/uploads
+                        :: ==========================================
+                        :: 3. Master Deployment
+                        :: ==========================================
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image="%MASTER_IMAGE%" --dry-run=client -o yaml > master-deploy.yaml
+                        if errorlevel 1 exit /b 1
+                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image="%MASTER_IMAGE%" 
+                        kubectl set env -f deployment bbhealthapp-api-master-n %EKS_NAMESPACE%  ^
+                        rootURL=https://localhost:8001 ^
+                        app.testrun="false" ^
+                        token.secret="%TOKEN_SECRET%" ^
+                        file.upload-dir=/app/uploads
 
-if errorlevel 1 exit /b 1
+                        if errorlevel 1 exit /b 1
 
-kubectl -n %EKS_NAMESPACE% apply -f master-deploy.yaml
-if errorlevel 1 exit /b 1
+                        kubectl -n %EKS_NAMESPACE% apply -f master-deploy.yaml
+                        if errorlevel 1 exit /b 1
 
-echo All three deployment manifests applied successfully.
-endlocal
+                        echo All three deployment manifests applied successfully.
+                        endlocal
 
 
                         REM Expose the Services
@@ -295,7 +296,7 @@ endlocal
     }
     post {
     success {
-        echo 'Backend-Jenkins yashasvi zala! Frontend-Jenkins trigger karat ahe...'
+        echo 'Backend-Jenkins Completed. Triggering Frontend-Jenkins...'
         build job: 'Frontend-Jenkins', wait: false
         }
     }

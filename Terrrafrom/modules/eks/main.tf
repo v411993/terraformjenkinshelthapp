@@ -170,6 +170,15 @@ resource "aws_vpc_security_group_ingress_rule" "node_self" {
   referenced_security_group_id = aws_security_group.node.id
 }
 
+resource "aws_vpc_security_group_ingress_rule" "node_app_port_30080" {
+  description     = "Allow inbound app traffic on NodePort 30080 from within the VPC"
+  from_port       = 30080
+  to_port         = 30080
+  ip_protocol     = "tcp"
+  security_group_id = aws_security_group.node.id
+  cidr_ipv4       = "10.0.0.0/16"
+}
+
 resource "aws_vpc_security_group_egress_rule" "node_all_traffic" {
   description       = "Allow nodes to communicate with any destination"
   ip_protocol       = "-1"

@@ -148,7 +148,7 @@ stage('3. Build and Test Frontend') {
                      secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
                 ]) {
                 bat '''
-                    aws eks update-kubeconfig --region %AWS_REGION% --name %EKS_CLUSTER%
+                    aws eks update-kubeconfig --region %AWS_REGION% --name %EKS_CLUSTER_NAME%
                     kubectl get nodes -o wide
                     kubectl create namespace %EKS_NAMESPACE% --dry-run=client -o yaml > namespace.yaml
                     kubectl apply -f namespace.yaml
