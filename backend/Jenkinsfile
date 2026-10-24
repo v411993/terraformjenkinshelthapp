@@ -104,7 +104,7 @@ pipeline {
                 ]) {
                     bat '''
                         echo Logging in to ECR...
-                        aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %ECR_REGISTRY%
+                        powershell -NoProfile -Command "$p = aws ecr get-login-password --region %AWS_REGION%; echo $p | docker login --username AWS --password-stdin %ECR_REGISTRY%"
                         if errorlevel 1 exit /b 1
                     '''
                 }
@@ -212,50 +212,81 @@ pipeline {
                 ]) {
                     
                     bat '''
+                        aws eks update-kubeconfig --region %AWS_REGION% --name %EKS_CLUSTER%
                         kubectl get ns
                         kubectl create namespace %EKS_NAMESPACE% --dry-run=client -o yaml > namespace.yaml
                         kubectl apply -f namespace.yaml
                         kubectl get deploy -n %EKS_NAMESPACE%
                         if errorlevel 1 exit /b 1
-                        # 1. Create and deploy bbhealthapp-api-master
-                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image=%MASTER_IMAGE% --dry-run=client -o yaml ^ 
-                        | kubectl set env -f - --local rootURL="https://localhosts:8001" token.secret="${TOKEN_SECRET}" file.upload-dir="${FILE_UPLOAD_DIR:-/app/uploads}" ^
-                        | kubectl apply -f -
+                        REM Apply the deployment YAML files
+                        
+@echo off
+setlocal
 
-                        # 2. Create and deploy bbhealthapp-api-document
-                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image=%DOCUMENT_IMAGE% --dry-run=client -o yaml ^
-                         | kubectl set env -f - --local rootURL="https://localhosts:8002" token.secret="${TOKEN_SECRET}" file.upload-dir="${FILE_UPLOAD_DIR:-/app/uploads}" ^
-                         | kubectl apply -f -
+:: ==========================================
+:: 1. Document Deployment
+:: ==========================================
+kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image="%DOCUMENT_IMAGE%" --dry-run=client -o yaml > document-deploy.yaml
+if errorlevel 1 exit /b 1
+kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-document --image="%DOCUMENT_IMAGE%"
+kubectl -n %EKS_NAMESPACE% set env -f document-deploy.yaml ^
+  rootURL=https://localhost:8002 ^
+  token.secret="%TOKEN_SECRET%" ^
+  file.upload-dir=/app/uploads
 
-                        # 3. Create and deploy bbhealthapp-api-register
-                        # Note: Fixed the image reference to %REGISTER_IMAGE% based on your previous snippet
-                        kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image=%REGISTER_IMAGE% --dry-run=client -o yaml ^
-                         | kubectl set env -f - --local rootURL="https://localhosts:8003" token.secret="${TOKEN_SECRET}" file.upload-dir="${FILE_UPLOAD_DIR:-/app/uploads}" ^
-                         | kubectl apply -f -
-                        # Exopose the Services
-                        kubectl -n %EKS_NAMESPACE% expose deployment bbhealthapp-api-master ^
-                        --name=bbhealthapp-service-master ^
-                        --port=8001 ^
-                        --target-port=8080 ^
-                        --type=ClusterIP
-                        kubectl -n %EKS_NAMESPACE% expose deployment bbhealthapp-api-document ^
-                        --name=bbhealthapp-service-document ^
-                        --port=8002 ^
-                        --target-port=8080 ^
-                        --type=ClusterIP
-                        kubectl -n %EKS_NAMESPACE% expose deployment bbhealthapp-api-register \
-                        --name=bbhealthapp-service-register \
-                        --port=8003 \
-                        --target-port=8080 \
-                        --type=ClusterIP
+if errorlevel 1 exit /b 1
+
+kubectl -n %EKS_NAMESPACE% apply -f document-deploy.yaml
+if errorlevel 1 exit /b 1
+
+:: ==========================================
+:: 2. Register Deployment
+:: ==========================================
+kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image="%REGISTER_IMAGE%" --dry-run=client -o yaml > register-deploy.yaml
+if errorlevel 1 exit /b 1
+kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-register --image="%REGISTER_IMAGE%"
+kubectl -n %EKS_NAMESPACE% set env -f register-deploy.yaml ^
+  rootURL=https://localhost:8003 ^
+  token.secret="%TOKEN_SECRET%" ^
+  file.upload-dir=/app/uploads
+
+if errorlevel 1 exit /b 1
+
+kubectl -n %EKS_NAMESPACE% apply -f register-deploy.yaml
+if errorlevel 1 exit /b 1
+
+:: ==========================================
+:: 3. Master Deployment
+:: ==========================================
+kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image="%MASTER_IMAGE%" --dry-run=client -o yaml > master-deploy.yaml
+if errorlevel 1 exit /b 1
+kubectl -n %EKS_NAMESPACE% create deployment bbhealthapp-api-master --image="%MASTER_IMAGE%" 
+kubectl -n %EKS_NAMESPACE% set env -f master-deploy.yaml ^
+  rootURL=https://localhost:8001 ^
+  token.secret="%TOKEN_SECRET%" ^
+  file.upload-dir=/app/uploads
+
+if errorlevel 1 exit /b 1
+
+kubectl -n %EKS_NAMESPACE% apply -f master-deploy.yaml
+if errorlevel 1 exit /b 1
+
+echo All three deployment manifests applied successfully.
+endlocal
+
+
+                        REM Expose the Services
+                        kubectl -n %EKS_NAMESPACE% expose deployment bbhealthapp-api-master --name=bbhealthapp-service-master --port=8001 --target-port=8080 --type=ClusterIP
+                        kubectl -n %EKS_NAMESPACE% expose deployment bbhealthapp-api-document --name=bbhealthapp-service-document --port=8002 --target-port=8080 --type=ClusterIP
+                        kubectl -n %EKS_NAMESPACE% expose deployment bbhealthapp-api-register --name=bbhealthapp-service-register --port=8003 --target-port=8080 --type=ClusterIP
+
                         if errorlevel 1 exit /b 1
-                        :EndComment
                         kubectl get deploy -n %EKS_NAMESPACE%
                         kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-master --timeout=180s
                         kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-document --timeout=180s
                         kubectl -n %EKS_NAMESPACE% rollout status deployment/bbhealthapp-api-register --timeout=180s
-						timeout /t 180 /nobreak > nul
-						kubectl get deploy -n  %EKS_NAMESPACE%
+                        timeout /t 180 /nobreak > nul
+                        kubectl get deploy -n %EKS_NAMESPACE%
                     '''
                    
                 }

@@ -125,7 +125,7 @@ stage('3. Build and Test Frontend') {
             steps {
                 dir('frontend') {
                 bat ' docker build -t %ECR_URI%:%app%-latest .'
-                #bat 'docker build -f "%WORKSPACE%/frontend/Dockerfile" -t %ECR_URI%:%app%-latest "%WORKSPACE%/frontend"'
+                
                 }
             }
         }
@@ -173,7 +173,7 @@ stage('3. Build and Test Frontend') {
                       echo     spec:
                       echo       containers:
                       echo         - name: %APP_NAME%
-                      echo           image: %ECR_URI%:latest
+                      echo           image: %ECR_URI%:%app%-latest
                       echo           ports:
                       echo             - containerPort: 80
                     ) > frontend-deployment.yaml
